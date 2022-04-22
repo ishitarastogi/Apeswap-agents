@@ -36,6 +36,9 @@ export function provideHandleTransaction(
   const cache: LRU<string, BigNumber> = new LRU<string, BigNumber>({
     max: 10000,
   });
+  const cache1: LRU<number, BigNumber> = new LRU<number, BigNumber>({
+    max: 10000,
+  });
   const gnanaContractBalance = new ethers.Contract(
     gnanaToken,
     util.BALANCE_OF,
@@ -67,15 +70,15 @@ export function provideHandleTransaction(
         }
 
         let totalSupply: BigNumber;
-        const Key1: string = `${blockNumber}`;
+        const Key1: number = blockNumber;
 
-        if (cache.has(Key1)) {
-          totalSupply = cache.get(Key1) as BigNumber;
+        if (cache1.has(Key1)) {
+          totalSupply = cache1.get(Key1) as BigNumber;
         } else {
           totalSupply = await gnanaContractSupply.totalSupply({
             blockTag: txEvent.blockNumber,
           });
-          cache.set(Key1, totalSupply);
+          cache1.set(Key1, totalSupply);
         }
         const thresholdBalance: BigNumber = BigNumber.from(percent)
           .mul(totalSupply)
