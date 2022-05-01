@@ -1,176 +1,143 @@
-import {
-  Finding,
-  FindingSeverity,
-  FindingType,
-  HandleTransaction,
-  TransactionEvent,
-} from "forta-agent";
-import {
-  createAddress,
-  TestTransactionEvent,
-  MockEthersProvider,
-} from "forta-agent-tools/lib/tests";
-const percent = 5;
-import { provideHandleTransaction } from "./agent";
-import { BigNumber } from "ethers";
-import util from "./utils";
-import { Interface } from "@ethersproject/abi";
+// import { HandleTransaction, Finding, FindingSeverity, FindingType } from "forta-agent";
+// import { Interface } from "ethers/lib/utils";
+// import { provideHandleTransaction } from "./agent";
+// import { createAddress, TestTransactionEvent } from "forta-agent-tools/lib/tests.utils";
+// import { when, resetAllWhenMocks } from "jest-when";
+// import { createLargeBalanceFinding, EVENT_ABI } from "./utils";
+// import { BigNumber } from "ethers";
 
-const testGnana: string = createAddress("0xdef1");
-const testBalanceOf: Interface = new Interface(util.BALANCE_OF);
-const testTotalSupply: Interface = new Interface(util.TOTAL_SUPPLY);
-const USER_ADDR = createAddress("0xf1e4a");
-const IRRELEVENT_IFACE: Interface = new Interface(["function wrongFunction()"]);
+// const TEST_GNANA_TOKEN_CONTRACT = createAddress("0xa1");
+// const TEST_GNANA_IFACE = new Interface(EVENT_ABI);
+// const IRRELEVANT_EVENT_IFACE = new Interface([
+//   "event IrrelevantEvent(address indexed from, address indexed to, uint256 amount)",
+// ]);
 
-const createFinding = ([address]: string[]): Finding =>
-  Finding.fromObject({
-    name: "Large holding of balance",
-    description: "Large holding of governance tokens",
-    alertId: "APESWAP-4",
-    severity: FindingSeverity.Info,
-    type: FindingType.Info,
-    protocol: "APESWAP",
-    metadata: {
-      address: address.toLowerCase(),
-    },
-  });
+// const mockFetcher = {
+//   getBalance: jest.fn(),
+//   gnanaTokenAddress: TEST_GNANA_TOKEN_CONTRACT,
+// };
 
-describe("Large holding of governance tokens to a address", () => {
-  let handleTransaction: HandleTransaction;
-  const mockProvider = new MockEthersProvider();
+// const testTransferAmounts: BigNumber[] = [
+//   BigNumber.from("2000000000000000000"), 
+//   BigNumber.from("3000000000000000000"), 
+//   BigNumber.from("1000000000000000000"), 
+// ];
 
-  beforeEach(() => {
-    handleTransaction = provideHandleTransaction(
-      testGnana,
-      percent,
-      mockProvider as any
-    );
-    mockProvider.clear();
-  });
+// const testBalances: BigNumber[] = [
+//   BigNumber.from("90000000000000000000000000"), //above threshold
+//   BigNumber.from("8000000000000000000000000000"), //above threshold
+//   BigNumber.from("1000000000"), //below threshold
+// ];
 
-  it("should ignore empty transactions", async () => {
-    const txEvent: TransactionEvent = new TestTransactionEvent();
+// const testBlock: number = 50;
+// const testAccounts: string[] = [createAddress("0x1"), createAddress("0x2"), createAddress("0x3")];
 
-    const findings: Finding[] = await handleTransaction(txEvent);
-    expect(findings).toStrictEqual([]);
-  });
+// describe("Golden Banana(GNANA) Balance Tests", () => {
+//   let handleTransaction: HandleTransaction;
 
-  it("should return no Findings due to incorrect signature", async () => {
-    const addr: string = createAddress("0xde1");
-    const Transaction: string = testBalanceOf.encodeFunctionData("balanceOf", [
-      addr,
-    ]);
-    mockProvider.addCallTo(testGnana, 50, testBalanceOf, "balanceOf", {
-      inputs: [createAddress("0xde1")],
-      outputs: [100],
-    });
-    mockProvider.addCallTo(testGnana, 50, testTotalSupply, "totalSupply", {
-      inputs: [],
-      outputs: [100],
-    });
-    const txEvent: TransactionEvent = new TestTransactionEvent()
-      .setTo(testGnana)
-      .setFrom(USER_ADDR)
-      .setData(Transaction)
-      .setBlock(50);
+//   const balanceThreshold = BigNumber.from("3000000000")
+//     .mul(`${10 ** 18}`)
+//     .mul(1) 
+//     .div(100);
 
-    const findings = await handleTransaction(txEvent);
-    console.log(findings);
-    //expect(findings).toStrictEqual([]);
-  });
+//   beforeEach(() => {
+//     resetAllWhenMocks();
 
-  it("should return no findings for incorrect address", async () => {
-    const wrongTestGnana: string = createAddress("0xd34d");
-    const addr: string = createAddress("0xde1");
+//     handleTransaction = provideHandleTransaction(mockFetcher as any, balanceThreshold);
+//   });
 
-    const Transaction: string = testBalanceOf.encodeFunctionData("balanceOf", [
-      addr,
-    ]);
+//   it("should return 0 findings in empty transactions", async () => {
+//     const transactionEvent = new TestTransactionEvent();
 
-    mockProvider.addCallTo(wrongTestGnana, 50, testBalanceOf, "balanceOf", {
-      inputs: [createAddress("0xde1")],
-      outputs: [100],
-    });
-    mockProvider.addCallTo(wrongTestGnana, 50, testTotalSupply, "totalSupply", {
-      inputs: [],
-      outputs: [100],
-    });
-    const txEvent: TransactionEvent = new TestTransactionEvent()
-      .setTo(wrongTestGnana)
-      .setFrom(USER_ADDR)
-      .setData(Transaction)
-      .setBlock(50);
+//     const findings: Finding[] = await handleTransaction(transactionEvent);
 
-    const findings = await handleTransaction(txEvent);
-    expect(findings).toStrictEqual([]);
-  });
+//     expect(findings).toStrictEqual([]);
+//   });
+//   it("should return empty finding for incorrect address", async () => {
+//     when(mockFetcher.getBalance).calledWith(testAccounts[0], testBlock).mockReturnValue(testBalances[0]);
+//     const differentContract = createAddress("0xd4");
 
-  it("should return multiple findings", async () => {
-    const TEST_DATA: string[][] = [
-      [createAddress("0xabc168")],
-      [createAddress("0xabc268")],
-      [createAddress("0xabc368")],
-    ];
-    const txEvent: TestTransactionEvent = new TestTransactionEvent()
-      .setFrom(USER_ADDR)
-      .setBlock(50);
+//     const log1 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
+//       createAddress("0xada"),
+//       testAccounts[0], 
+//       testTransferAmounts[0], 
+//     ]);
 
-    for (let [addr] of TEST_DATA) {
-      mockProvider.addCallTo(testGnana, 50, testBalanceOf, "balanceOf", {
-        inputs: [addr],
-        outputs: [100],
-      });
+//     const transactionEvent = new TestTransactionEvent()
+//       .addAnonymousEventLog(differentContract, log1.data, ...log1.topics)
+//       .setBlock(testBlock);
+//     const findings = await handleTransaction(transactionEvent);
+//     expect(findings).toStrictEqual([]);
+//   });
+//   it("should return empty finding for incorrect event signature", async () => {
+//     when(mockFetcher.getBalance).calledWith(testAccounts[0], testBlock).mockReturnValue(testBalances[0]);
 
-      mockProvider.addCallTo(testGnana, 50, testTotalSupply, "totalSupply", {
-        inputs: [],
-        outputs: [100],
-      });
+//     const log1 = IRRELEVANT_EVENT_IFACE.encodeEventLog(IRRELEVANT_EVENT_IFACE.getEvent("IrrelevantEvent"), [
+//       createAddress("0xcaa"), 
+//       testAccounts[0],
+//       testTransferAmounts[1],
+//     ]);
 
-      txEvent.addTraces({
-        to: testGnana,
-        from: USER_ADDR,
-        input: testBalanceOf.encodeFunctionData("balanceOf", [addr]),
-      });
-    }
+//     const transactionEvent = new TestTransactionEvent()
+//       .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log1.data, ...log1.topics)
+//       .setBlock(testBlock);
+//     const findings = await handleTransaction(transactionEvent);
 
-    const findings = await handleTransaction(txEvent);
-    console.log(findings);
-    // expect(findings).toStrictEqual([
-    //   createFinding(TEST_DATA[0]),
-    //   createFinding(TEST_DATA[1]),
-    //   createFinding(TEST_DATA[2]),
-    // ]);
-  });
+//     expect(findings).toStrictEqual([]);
+//   });
+//   it("should return empty finding if account balance are below threshold", async () => {
+//     when(mockFetcher.getBalance).calledWith(testAccounts[2], testBlock).mockReturnValue(testBalances[2]);
 
-  // it("should return findings only when balance is greater than thresholdBalance", async () => {
-  //   const TEST_DATA: string[][] = [
-  //     [createAddress("0xabc348"), BigNumber.from(2).toString()],
-  //     [createAddress("0xabc168"), BigNumber.from(1).toString()],
-  //     [createAddress("0xabc248"), BigNumber.from(100).toString()],
-  //   ];
-  //   const txEvent: TestTransactionEvent = new TestTransactionEvent()
-  //     .setFrom(USER_ADDR)
-  //     .setBlock(50);
+//     const log1 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
+//       createAddress("0xaaa"), 
+//       testAccounts[2], 
+//       testTransferAmounts[2], 
+//     ]);
 
-  //   for (let [addr, amount] of TEST_DATA) {
-  //     mockProvider.addCallTo(testGnana, 50, testBalanceOf, "balanceOf", {
-  //       inputs: [addr],
-  //       outputs: [amount],
-  //     });
+//     const transactionEvent = new TestTransactionEvent()
+//       .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log1.data, ...log1.topics)
+//       .setBlock(testBlock);
+//     const findings = await handleTransaction(transactionEvent);
 
-  //     mockProvider.addCallTo(testGnana, 50, testTotalSupply, "totalSupply", {
-  //       inputs: [],
-  //       outputs: [100],
-  //     });
+//     expect(findings).toStrictEqual([]);
+//   });
+//   it("should return a finding if an account's balance is above threshold", async () => {
+//     when(mockFetcher.getBalance).calledWith(testAccounts[0], testBlock).mockReturnValue(testBalances[0]);
 
-  //     txEvent.addTraces({
-  //       to: testGnana,
-  //       from: USER_ADDR,
-  //       input: testBalanceOf.encodeFunctionData("balanceOf", [addr]),
-  //     });
-  //   }
+//     const log1 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
+//       createAddress("0xeaa"), 
+//       testAccounts[0], 
+//       testTransferAmounts[0], 
+//     ]);
 
-  //   const findings = await handleTransaction(txEvent);
-  //   expect(findings).toStrictEqual([createFinding(TEST_DATA[2])]);
-  // });
-});
+//     const transactionEvent = new TestTransactionEvent()
+//       .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log1.data, ...log1.topics)
+//       .setBlock(testBlock);
+//     const findings = await handleTransaction(transactionEvent);
+//      expect(findings).toStrictEqual([createLargeBalanceFinding(testAccounts[0], testBalances[0])]);
+//   });
+//   it("should return multiple findings if an account's balance is above threshold", async () => {
+//     when(mockFetcher.getBalance).calledWith(testAccounts[0], testBlock).mockReturnValue(testBalances[0]);
+//     when(mockFetcher.getBalance).calledWith(testAccounts[1], testBlock).mockReturnValue(testBalances[1]);
+
+//     const log1 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
+//       createAddress("0xeaa"), 
+//       testAccounts[0], 
+//       testTransferAmounts[1],
+//     ]);
+//     const log2 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
+//         createAddress("0xacb"),
+//         testAccounts[1], 
+//         BigNumber.from("1000000000000"), 
+//       ]);
+//     const transactionEvent = new TestTransactionEvent()
+//       .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log1.data, ...log1.topics)
+//       .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log2.data, ...log2.topics)
+
+//       .setBlock(testBlock);
+//     const findings = await handleTransaction(transactionEvent);
+//     expect(findings).toStrictEqual([
+//         createLargeBalanceFinding(testAccounts[0], testBalances[0]),
+//         createLargeBalanceFinding(testAccounts[1], testBalances[1]),
+//       ]);  });
+// });
