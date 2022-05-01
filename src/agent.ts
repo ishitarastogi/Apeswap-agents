@@ -21,11 +21,8 @@ const FETCHER: DataFetcher = new DataFetcher(
 );
 let accounts: string[] = [];
 
-
 export const provideHandleTransaction =
-  (fetcher: DataFetcher,    
-    accounts: string[]
-    ): HandleTransaction =>
+  (fetcher: DataFetcher, accounts: string[]): HandleTransaction =>
   async (txEvent: TransactionEvent): Promise<Finding[]> => {
     const findings: Finding[] = [];
     const logs: LogDescription[] = txEvent.filterLog(
@@ -40,24 +37,28 @@ export const provideHandleTransaction =
 
     return findings;
   };
-  export const provideHandleBlock = (
-    fetcher: DataFetcher,
-    balanceThreshold: BigNumber,
-    accounts: string[]
-  ): HandleBlock => {
-    return async (blockEvent: BlockEvent): Promise<Finding[]> => {
-      const findings: Finding[] = [];
-      for(let addr = 0; addr < accounts.length; addr++) {
-        const balance: BigNumber= await fetcher.getBalance(accounts[addr], blockEvent.blockNumber);
-        if (balance.gt(balanceThreshold)) {
-          findings.push(createLargeBalanceFinding(accounts[addr], balance));
-        }
+export const provideHandleBlock = (
+  fetcher: DataFetcher,
+  balanceThreshold: BigNumber,
+  accounts: string[]
+): HandleBlock => {
+  return async (blockEvent: BlockEvent): Promise<Finding[]> => {
+    const findings: Finding[] = [];
+    for (let addr = 0; addr < accounts.length; addr++) {
+      const balance: BigNumber = await fetcher.getBalance(
+        accounts[addr],
+        blockEvent.blockNumber
+      );
+      if (balance.gt(balanceThreshold)) {
+        findings.push(createLargeBalanceFinding(accounts[addr], balance));
+        accounts.splice(addr, 1);
+        addr--;
       }
-      return findings;
-    };
+    }
+    return findings;
   };
+};
 export default {
-  handleTransaction: provideHandleTransaction(FETCHER,accounts),
-  handleBlock: provideHandleBlock(FETCHER, BALANCE_THRESHOLD,accounts),
-
+  handleTransaction: provideHandleTransaction(FETCHER, accounts),
+  handleBlock: provideHandleBlock(FETCHER, BALANCE_THRESHOLD, accounts),
 };
