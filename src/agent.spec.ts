@@ -1,10 +1,14 @@
-import { HandleTransaction, Finding, FindingSeverity, FindingType } from "forta-agent";
+import { Finding, HandleBlock, BlockEvent } from "forta-agent";
 import { Interface } from "ethers/lib/utils";
-import { provideHandleTransaction } from "./agent";
-import { createAddress, TestTransactionEvent } from "forta-agent-tools/lib/tests.utils";
-import { when, resetAllWhenMocks } from "jest-when";
+import { provideHandleBlock } from "./agent";
+import {
+  createAddress,
+  TestBlockEvent,
+  MockEthersProvider,
+} from "forta-agent-tools/lib/tests";
+import { when } from "jest-when";
 import { createLargeBalanceFinding, EVENT_ABI } from "./utils";
-import { BigNumber } from "ethers";
+import { BigNumber, utils } from "ethers";
 
 const TEST_GNANA_TOKEN_CONTRACT = createAddress("0xa1");
 const TEST_GNANA_IFACE = new Interface(EVENT_ABI);
@@ -18,126 +22,86 @@ const mockFetcher = {
 };
 
 const testTransferAmounts: BigNumber[] = [
-  BigNumber.from("2000000000000000000"), 
-  BigNumber.from("3000000000000000000"), 
-  BigNumber.from("1000000000000000000"), 
+  BigNumber.from("2000000000000000000"),
+  BigNumber.from("3000000000000000000"),
+  BigNumber.from("30000"),
 ];
 
 const testBalances: BigNumber[] = [
-  BigNumber.from("90000000000000000000000000"), //above threshold
-  BigNumber.from("8000000000000000000000000000"), //above threshold
-  BigNumber.from("1000000000"), //below threshold
+  BigNumber.from("300000000000000000000000000"), //above threshold
+  BigNumber.from("80000000000000000000000000"), //above threshold
+  BigNumber.from("30000"), //below threshold
 ];
 
-const testBlock: number = 50;
-const testAccounts: string[] = [createAddress("0x1"), createAddress("0x2"), createAddress("0x3")];
+const testBlock: number = 19214517;
+const testAccounts: string[] = [
+  createAddress("0x1"),
+  createAddress("0x2"),
+  createAddress("0x3"),
+];
 
-describe("Golden Banana(GNANA) Balance Tests", () => {
-  let handleTransaction: HandleTransaction;
+describe("Golden Banana(GNANA) Large Balance Tests", () => {
+  let handleBlock: HandleBlock;
+  const mockProvider = new MockEthersProvider();
 
   const balanceThreshold = BigNumber.from("3000000000")
     .mul(`${10 ** 18}`)
-    .mul(1) 
+    .mul(1)
     .div(100);
+  const testAddr: Set<string> = new Set<string>();
 
   beforeEach(() => {
-    resetAllWhenMocks();
+    mockFetcher.getBalance.mockClear();
+    mockProvider.clear();
 
-    handleTransaction = provideHandleTransaction(mockFetcher as any, balanceThreshold);
+    handleBlock = provideHandleBlock(
+      mockFetcher as any,
+      balanceThreshold,
+      testAddr,
+      mockProvider as any
+    );
   });
 
-  it("should return 0 findings in empty transactions", async () => {
-    const transactionEvent = new TestTransactionEvent();
+  it("should return a finding ", async () => {
+    const blockHash =
+      "0x2d72d415ab86cadfb2222aa6e20c1eead908602f9469576b3cd848e5588a52fb";
+    const address = "0x2449E7940B0Df3426981945431AA9dc95b982702";
+    const topics = [
+      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+      "0x0000000000000000000000000db723d5863a9b33ad83aa349b27f8136b6d5360",
+      "0x000000000000000000000000cffcb4c9d94524e4609ffef60c47daf8fc38ae1b",
+    ];
+    const fromBlock = 19243883;
+    const toBlock = 234;
+    const filter = { address, topics, blockHash };
+    const logs = [
+      {
+        blockNumber: 19243883,
+        blockHash:
+          "0x2d72d415ab86cadfb2222aa6e20c1eead908602f9469576b3cd848e5588a52fb",
+        transactionIndex: 4,
+        removed: false,
+        address: "0x2449E7940B0Df3426981945431AA9dc95b982702",
+        data: "0x000000000000000000000000000000000000000000f330ebef7f58e6e6000000",
+        topics: [
+          "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+          "0x0000000000000000000000000db723d5863a9b33ad83aa349b27f8136b6d5360",
+          "0x000000000000000000000000cffcb4c9d94524e4609ffef60c47daf8fc38ae1b",
+        ],
+        transactionHash:
+          "0x0d1229486bb800cc835e60054466b1ef80df6167bd5414ac2ee340b3ad66fb40",
+        logIndex: 8,
+      },
+    ];
 
-    const findings: Finding[] = await handleTransaction(transactionEvent);
+    mockProvider.addFilteredLogs(filter, logs);
 
-    expect(findings).toStrictEqual([]);
+    when(mockFetcher.getBalance)
+      .calledWith(testAccounts[0], testBlock)
+      .mockReturnValue(testBalances[0]);
+    const blockEvent: BlockEvent = new TestBlockEvent().setHash(blockHash);
+
+    const findings: Finding[] = await handleBlock(blockEvent);
+    console.log(findings);
   });
-  it("should return empty finding for incorrect address", async () => {
-    when(mockFetcher.getBalance).calledWith(testAccounts[0], testBlock).mockReturnValue(testBalances[0]);
-    const differentContract = createAddress("0xd4");
-
-    const log1 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
-      createAddress("0xada"),
-      testAccounts[0], 
-      testTransferAmounts[0], 
-    ]);
-
-    const transactionEvent = new TestTransactionEvent()
-      .addAnonymousEventLog(differentContract, log1.data, ...log1.topics)
-      .setBlock(testBlock);
-    const findings = await handleTransaction(transactionEvent);
-    expect(findings).toStrictEqual([]);
-  });
-  it("should return empty finding for incorrect event signature", async () => {
-    when(mockFetcher.getBalance).calledWith(testAccounts[0], testBlock).mockReturnValue(testBalances[0]);
-
-    const log1 = IRRELEVANT_EVENT_IFACE.encodeEventLog(IRRELEVANT_EVENT_IFACE.getEvent("IrrelevantEvent"), [
-      createAddress("0xcaa"), 
-      testAccounts[0],
-      testTransferAmounts[1],
-    ]);
-
-    const transactionEvent = new TestTransactionEvent()
-      .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log1.data, ...log1.topics)
-      .setBlock(testBlock);
-    const findings = await handleTransaction(transactionEvent);
-
-    expect(findings).toStrictEqual([]);
-  });
-  it("should return empty finding if account balance are below threshold", async () => {
-    when(mockFetcher.getBalance).calledWith(testAccounts[2], testBlock).mockReturnValue(testBalances[2]);
-
-    const log1 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
-      createAddress("0xaaa"), 
-      testAccounts[2], 
-      testTransferAmounts[2], 
-    ]);
-
-    const transactionEvent = new TestTransactionEvent()
-      .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log1.data, ...log1.topics)
-      .setBlock(testBlock);
-    const findings = await handleTransaction(transactionEvent);
-
-    expect(findings).toStrictEqual([]);
-  });
-  it("should return a finding if an account's balance is above threshold", async () => {
-    when(mockFetcher.getBalance).calledWith(testAccounts[0], testBlock).mockReturnValue(testBalances[0]);
-
-    const log1 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
-      createAddress("0xeaa"), 
-      testAccounts[0], 
-      testTransferAmounts[0], 
-    ]);
-
-    const transactionEvent = new TestTransactionEvent()
-      .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log1.data, ...log1.topics)
-      .setBlock(testBlock);
-    const findings = await handleTransaction(transactionEvent);
-     expect(findings).toStrictEqual([createLargeBalanceFinding(testAccounts[0], testBalances[0])]);
-  });
-  it("should return multiple findings if an account's balance is above threshold", async () => {
-    when(mockFetcher.getBalance).calledWith(testAccounts[0], testBlock).mockReturnValue(testBalances[0]);
-    when(mockFetcher.getBalance).calledWith(testAccounts[1], testBlock).mockReturnValue(testBalances[1]);
-
-    const log1 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
-      createAddress("0xeaa"), 
-      testAccounts[0], 
-      testTransferAmounts[1],
-    ]);
-    const log2 = TEST_GNANA_IFACE.encodeEventLog(TEST_GNANA_IFACE.getEvent("Transfer"), [
-        createAddress("0xacb"),
-        testAccounts[1], 
-        BigNumber.from("1000000000000"), 
-      ]);
-    const transactionEvent = new TestTransactionEvent()
-      .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log1.data, ...log1.topics)
-      .addAnonymousEventLog(TEST_GNANA_TOKEN_CONTRACT, log2.data, ...log2.topics)
-
-      .setBlock(testBlock);
-    const findings = await handleTransaction(transactionEvent);
-    expect(findings).toStrictEqual([
-        createLargeBalanceFinding(testAccounts[0], testBalances[0]),
-        createLargeBalanceFinding(testAccounts[1], testBalances[1]),
-      ]);  });
 });
