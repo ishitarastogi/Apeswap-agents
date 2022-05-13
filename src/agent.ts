@@ -1,13 +1,10 @@
 import {
   BlockEvent,
   Finding,
-  TransactionEvent,
   getEthersProvider,
-  HandleTransaction,
   HandleBlock,
-  LogDescription,
 } from "forta-agent";
-import { BigNumber } from "ethers";
+import { BigNumber, utils, providers } from "ethers";
 import DataFetcher from "./data.fetcher";
 import {
   GNANA_TOKEN_CONTRACT,
@@ -15,50 +12,55 @@ import {
   createLargeBalanceFinding,
   BALANCE_THRESHOLD,
 } from "./utils";
+
 const FETCHER: DataFetcher = new DataFetcher(
   GNANA_TOKEN_CONTRACT,
   getEthersProvider()
 );
-let accounts: string[] = [];
+let accounts: Set<string> = new Set<string>();
 
-export const provideHandleTransaction =
-  (fetcher: DataFetcher, accounts: string[]): HandleTransaction =>
-  async (txEvent: TransactionEvent): Promise<Finding[]> => {
-    const findings: Finding[] = [];
-    const logs: LogDescription[] = txEvent.filterLog(
-      EVENT_ABI,
-      fetcher.gnanaTokenAddress
-    );
-
-    for (const log of logs) {
-      const toAddress = log.args.to;
-      accounts.push(toAddress);
-    }
-
-    return findings;
-  };
-export const provideHandleBlock = (
+export function provideHandleBlock(
   fetcher: DataFetcher,
   balanceThreshold: BigNumber,
-  accounts: string[]
-): HandleBlock => {
+  accounts: Set<string>,
+  provider: providers.Provider
+): HandleBlock {
   return async (blockEvent: BlockEvent): Promise<Finding[]> => {
     const findings: Finding[] = [];
-    for (let addr = 0; addr < accounts.length; addr++) {
+    let Interface = new utils.Interface(EVENT_ABI);
+
+    const filter = {
+      address: fetcher.gnanaTokenAddress,
+      topics: [Interface.getEventTopic("Transfer")],
+      blockHash: blockEvent.blockHash,
+    };
+
+    const logArray = await provider.getLogs(filter);
+    console.log(logArray);
+    let events = logArray.map((log) => Interface.parseLog(log));
+    for (let event of events) {
+      accounts.add(event.args.to);
+    }
+
+    for (let addr of Array.from(accounts.values())) {
       const balance: BigNumber = await fetcher.getBalance(
-        accounts[addr],
+        addr,
         blockEvent.blockNumber
       );
       if (balance.gt(balanceThreshold)) {
-        findings.push(createLargeBalanceFinding(accounts[addr], balance));
-        accounts.splice(addr, 1);
-        addr--;
+        findings.push(createLargeBalanceFinding(addr, balance));
+        accounts.clear();
       }
     }
     return findings;
   };
-};
+}
+
 export default {
-  handleTransaction: provideHandleTransaction(FETCHER, accounts),
-  handleBlock: provideHandleBlock(FETCHER, BALANCE_THRESHOLD, accounts),
+  handleBlock: provideHandleBlock(
+    FETCHER,
+    BALANCE_THRESHOLD,
+    accounts,
+    getEthersProvider()
+  ),
 };
