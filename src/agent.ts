@@ -30,13 +30,11 @@ export function provideHandleBlock(
     let Interface = new utils.Interface(EVENT_ABI);
 
     const filter = {
-      address: fetcher.gnanaTokenAddress,
+      address: GNANA_TOKEN_CONTRACT,
       topics: [Interface.getEventTopic("Transfer")],
       blockHash: blockEvent.blockHash,
     };
-
     const logArray = await provider.getLogs(filter);
-    console.log(logArray);
     let events = logArray.map((log) => Interface.parseLog(log));
     for (let event of events) {
       accounts.add(event.args.to);
@@ -47,9 +45,9 @@ export function provideHandleBlock(
         addr,
         blockEvent.blockNumber
       );
+
       if (balance.gt(balanceThreshold)) {
         findings.push(createLargeBalanceFinding(addr, balance));
-        accounts.clear();
       }
     }
     return findings;
